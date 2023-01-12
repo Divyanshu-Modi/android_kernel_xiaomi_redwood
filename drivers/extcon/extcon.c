@@ -1231,13 +1231,12 @@ int extcon_dev_register(struct extcon_dev *edev)
 	}
 
 	spin_lock_init(&edev->lock);
-	if (edev->max_supported) {
-		edev->nh = kcalloc(edev->max_supported, sizeof(*edev->nh),
-				GFP_KERNEL);
-		if (!edev->nh) {
-			ret = -ENOMEM;
-			goto err_alloc_nh;
-		}
+	edev->nh = devm_kcalloc(&edev->dev, edev->max_supported,
+				sizeof(*edev->nh), GFP_KERNEL);
+	if (!edev->nh) {
+		ret = -ENOMEM;
+		device_unregister(&edev->dev);
+		goto err_dev;
 	}
 
 	for (index = 0; index < edev->max_supported; index++)

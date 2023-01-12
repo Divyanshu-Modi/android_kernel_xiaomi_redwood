@@ -1033,7 +1033,6 @@ err_notifier_unregister:
 	mlx5_core_destroy_mkey(dev, &tracer->buff.mkey);
 err_dealloc_pd:
 	mlx5_core_dealloc_pd(dev, tracer->buff.pdn);
-err_cancel_work:
 	cancel_work_sync(&tracer->read_fw_strings_work);
 	return err;
 }

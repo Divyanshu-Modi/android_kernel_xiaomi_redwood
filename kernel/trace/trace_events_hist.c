@@ -2906,9 +2906,9 @@ parse_field(struct hist_trigger_data *hist_data, struct trace_event_file *file,
 			/*
 			 * For backward compatibility, if field_name
 			 * was "cpu", then we treat this the same as
-			 * common_cpu. This also works for "CPU".
+			 * common_cpu.
 			 */
-			if (field && field->filter_type == FILTER_CPU) {
+			if (strcmp(field_name, "cpu") == 0) {
 				*flags |= HIST_FIELD_FL_CPU;
 			} else {
 				hist_err(tr, HIST_ERR_FIELD_NOT_FOUND,

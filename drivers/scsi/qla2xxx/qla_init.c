@@ -1330,13 +1330,6 @@ int qla24xx_async_gpdb(struct scsi_qla_host *vha, fc_port_t *fcport, u8 opt)
 		return rval;
 	}
 
-	if (!vha->flags.online || fcport->flags & FCF_ASYNC_SENT) {
-		ql_log(ql_log_warn, vha, 0xffff,
-		    "%s: %8phC online %d flags %x - not sending command.\n",
-		    __func__, fcport->port_name, vha->flags.online, fcport->flags);
-		goto done;
-	}
-
 	sp = qla2x00_get_sp(vha, fcport, GFP_KERNEL);
 	if (!sp)
 		goto done;

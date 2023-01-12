@@ -3527,18 +3527,6 @@ static int ep_pcie_probe(struct platform_device *pdev)
 	"PCIe V%d: PME during reboot/panic (in D3hot) is %s needed\n",
 	ep_pcie_dev.rev, ep_pcie_dev.avoid_reboot_in_d3hot ? "" : "not");
 
-	ep_pcie_dev.pme_in_wake_from_d3cold =
-		of_property_read_bool((&pdev->dev)->of_node,
-				"qcom,pme-in-wake-from-d3cold");
-	EP_PCIE_DBG(&ep_pcie_dev,
-	"PCIe V%d: PME is%s sent during wake from d3cold\n",
-	ep_pcie_dev.rev, ep_pcie_dev.pme_in_wake_from_d3cold ? "" : " not");
-
-	ep_pcie_dev.bme_deassert_irq = of_property_read_bool((&pdev->dev)->of_node,
-			"qcom,pcie-bme-deassert-irq");
-	EP_PCIE_DBG(&ep_pcie_dev, "PCIe V%d: BME deassert irq is%s enabled\n",
-			ep_pcie_dev.rev, ep_pcie_dev.bme_deassert_irq ? "" : " not");
-
 	ret = of_property_read_u32((&pdev->dev)->of_node,
 				"qcom,mhi-soc-reset-offset",
 				&ep_pcie_dev.mhi_soc_reset_offset);

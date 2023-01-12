@@ -687,30 +687,6 @@ emit_clear:
 		 * BPF_ST NOSPEC (speculation barrier)
 		 */
 		case BPF_ST | BPF_NOSPEC:
-			if (!security_ftr_enabled(SEC_FTR_FAVOUR_SECURITY) ||
-					(!security_ftr_enabled(SEC_FTR_L1D_FLUSH_PR) &&
-					(!security_ftr_enabled(SEC_FTR_L1D_FLUSH_HV) || !cpu_has_feature(CPU_FTR_HVMODE))))
-				break;
-
-			switch (stf_barrier) {
-			case STF_BARRIER_EIEIO:
-				EMIT(0x7c0006ac | 0x02000000);
-				break;
-			case STF_BARRIER_SYNC_ORI:
-				EMIT(PPC_INST_SYNC);
-				PPC_LD(b2p[TMP_REG_1], 13, 0);
-				PPC_ORI(31, 31, 0);
-				break;
-			case STF_BARRIER_FALLBACK:
-				EMIT(PPC_INST_MFLR | ___PPC_RT(b2p[TMP_REG_1]));
-				PPC_LI64(12, dereference_kernel_function_descriptor(bpf_stf_barrier));
-				PPC_MTCTR(12);
-				EMIT(PPC_INST_BCTR | 0x1);
-				PPC_MTLR(b2p[TMP_REG_1]);
-				break;
-			case STF_BARRIER_NONE:
-				break;
-			}
 			break;
 
 		/*

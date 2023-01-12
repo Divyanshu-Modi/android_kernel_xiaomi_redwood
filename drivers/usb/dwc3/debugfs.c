@@ -1024,7 +1024,6 @@ void dwc3_debugfs_create_endpoint_dir(struct dwc3_ep *dep)
 {
 	struct dentry		*dir;
 	struct dentry		*root;
-
 	root = debugfs_lookup(dev_name(dep->dwc->dev), usb_debug_root);
 	dir = debugfs_create_dir(dep->name, root);
 	if (!dir) {

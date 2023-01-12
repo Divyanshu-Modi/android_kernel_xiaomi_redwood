@@ -100,14 +100,19 @@ static long zynqmp_pll_round_rate(struct clk_hw *hw, unsigned long rate,
 	u32 fbdiv;
 	u32 mult, div;
 
-	/* Let rate fall inside the range PS_PLL_VCO_MIN ~ PS_PLL_VCO_MAX */
-	if (rate > PS_PLL_VCO_MAX) {
-		div = DIV_ROUND_UP(rate, PS_PLL_VCO_MAX);
-		rate = rate / div;
-	}
-	if (rate < PS_PLL_VCO_MIN) {
-		mult = DIV_ROUND_UP(PS_PLL_VCO_MIN, rate);
-		rate = rate * mult;
+	/* Enable the fractional mode if needed */
+	rate_div = (rate * FRAC_DIV) / *prate;
+	f = rate_div % FRAC_DIV;
+	if (f) {
+		if (rate > PS_PLL_VCO_MAX) {
+			fbdiv = rate / PS_PLL_VCO_MAX;
+			rate = rate / (fbdiv + 1);
+		}
+		if (rate < PS_PLL_VCO_MIN) {
+			fbdiv = DIV_ROUND_UP(PS_PLL_VCO_MIN, rate);
+			rate = rate * fbdiv;
+		}
+		return rate;
 	}
 
 	fbdiv = DIV_ROUND_CLOSEST(rate, *prate);

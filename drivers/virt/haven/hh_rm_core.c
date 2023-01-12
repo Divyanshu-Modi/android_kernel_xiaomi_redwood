@@ -106,10 +106,6 @@ hh_rm_init_connection_buff(struct hh_rm_connection *connection,
 	struct hh_rm_rpc_hdr *hdr = recv_buff;
 	size_t max_buf_size;
 
-	connection->num_fragments = hdr->fragments;
-	connection->fragments_received = 0;
-	connection->type = hdr->type;
-
 	/* Some of the 'reply' types doesn't contain any payload */
 	if (!payload_size)
 		return 0;
@@ -125,8 +121,9 @@ hh_rm_init_connection_buff(struct hh_rm_connection *connection,
 	/* If the data is split into multiple fragments, allocate a large
 	 * enough buffer to hold the payloads for all the fragments.
 	 */
-	connection->payload = kzalloc(max_buf_size, GFP_KERNEL);
-	if (!connection->payload)
+	connection->recv_buff = connection->current_recv_buff =
+				kzalloc(max_buf_size, GFP_KERNEL);
+	if (!connection->recv_buff)
 		return -ENOMEM;
 
 	memcpy(connection->payload, recv_buff + hdr_size, payload_size);

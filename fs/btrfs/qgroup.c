@@ -1130,6 +1130,7 @@ int btrfs_quota_disable(struct btrfs_fs_info *fs_info)
 	mutex_lock(&fs_info->qgroup_ioctl_lock);
 	if (!fs_info->quota_root)
 		goto out;
+	mutex_unlock(&fs_info->qgroup_ioctl_lock);
 
 	/*
 	 * Unlock the qgroup_ioctl_lock mutex before waiting for the rescan worker to
@@ -1162,13 +1163,14 @@ int btrfs_quota_disable(struct btrfs_fs_info *fs_info)
 	if (IS_ERR(trans)) {
 		ret = PTR_ERR(trans);
 		trans = NULL;
-		set_bit(BTRFS_FS_QUOTA_ENABLED, &fs_info->flags);
 		goto out;
 	}
 
 	if (!fs_info->quota_root)
 		goto out;
 
+	clear_bit(BTRFS_FS_QUOTA_ENABLED, &fs_info->flags);
+	btrfs_qgroup_wait_for_completion(fs_info, false);
 	spin_lock(&fs_info->qgroup_lock);
 	quota_root = fs_info->quota_root;
 	fs_info->quota_root = NULL;
@@ -3196,8 +3198,7 @@ out:
 static bool rescan_should_stop(struct btrfs_fs_info *fs_info)
 {
 	return btrfs_fs_closing(fs_info) ||
-		test_bit(BTRFS_FS_STATE_REMOUNTING, &fs_info->fs_state) ||
-		!test_bit(BTRFS_FS_QUOTA_ENABLED, &fs_info->flags);
+		test_bit(BTRFS_FS_STATE_REMOUNTING, &fs_info->fs_state);
 }
 
 static void btrfs_qgroup_rescan_worker(struct btrfs_work *work)

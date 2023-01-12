@@ -6318,9 +6318,7 @@ static void nfs4_delegreturn_release(void *calldata)
 		pnfs_roc_release(&data->lr.arg, &data->lr.res,
 				 data->res.lr_ret);
 	if (inode) {
-		nfs4_fattr_set_prechange(&data->fattr,
-					 inode_peek_iversion_raw(inode));
-		nfs_refresh_inode(inode, &data->fattr);
+		nfs_post_op_update_inode_force_wcc(inode, &data->fattr);
 		nfs_iput_and_deactive(inode);
 	}
 	kfree(calldata);

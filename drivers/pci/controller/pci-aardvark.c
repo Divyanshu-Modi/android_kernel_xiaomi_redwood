@@ -51,7 +51,6 @@
 #define   PIO_COMPLETION_STATUS_CRS		2
 #define   PIO_COMPLETION_STATUS_CA		4
 #define   PIO_NON_POSTED_REQ			BIT(10)
-#define   PIO_ERR_STATUS			BIT(11)
 #define PIO_ADDR_LS				(PIO_BASE_ADDR + 0x8)
 #define PIO_ADDR_MS				(PIO_BASE_ADDR + 0xc)
 #define PIO_WR_DATA				(PIO_BASE_ADDR + 0x10)
@@ -158,6 +157,7 @@
 #define     LTSSM_SHIFT				24
 #define     LTSSM_MASK				0x3f
 #define     RC_BAR_CONFIG			0x300
+#define VENDOR_ID_REG				(LMI_BASE_ADDR + 0x44)
 
 /* LTSSM values in CFG_REG */
 enum {
@@ -250,7 +250,7 @@ enum {
 	(PCIE_CONF_BUS(bus) | PCIE_CONF_DEV(PCI_SLOT(devfn))	| \
 	 PCIE_CONF_FUNC(PCI_FUNC(devfn)) | PCIE_CONF_REG(where))
 
-#define PIO_RETRY_CNT			750000 /* 1.5 s */
+#define PIO_RETRY_CNT			500
 #define PIO_RETRY_DELAY			2 /* 2 us*/
 
 #define LINK_WAIT_MAX_RETRIES		10
@@ -503,31 +503,6 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
 	reg = (PCI_VENDOR_ID_MARVELL << 16) | PCI_VENDOR_ID_MARVELL;
 	advk_writel(pcie, reg, VENDOR_ID_REG);
 
-	/*
-	 * Change Class Code of PCI Bridge device to PCI Bridge (0x600400),
-	 * because the default value is Mass storage controller (0x010400).
-	 *
-	 * Note that this Aardvark PCI Bridge does not have compliant Type 1
-	 * Configuration Space and it even cannot be accessed via Aardvark's
-	 * PCI config space access method. Something like config space is
-	 * available in internal Aardvark registers starting at offset 0x0
-	 * and is reported as Type 0. In range 0x10 - 0x34 it has totally
-	 * different registers.
-	 *
-	 * Therefore driver uses emulation of PCI Bridge which emulates
-	 * access to configuration space via internal Aardvark registers or
-	 * emulated configuration buffer.
-	 */
-	reg = advk_readl(pcie, PCIE_CORE_DEV_REV_REG);
-	reg &= ~0xffffff00;
-	reg |= (PCI_CLASS_BRIDGE_PCI << 8) << 8;
-	advk_writel(pcie, reg, PCIE_CORE_DEV_REV_REG);
-
-	/* Disable Root Bridge I/O space, memory space and bus mastering */
-	reg = advk_readl(pcie, PCIE_CORE_CMD_STATUS_REG);
-	reg &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
-	advk_writel(pcie, reg, PCIE_CORE_CMD_STATUS_REG);
-
 	/* Set Advanced Error Capabilities and Control PF0 register */
 	reg = PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX |
 		PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX_EN |
@@ -741,13 +716,13 @@ static int advk_pcie_wait_pio(struct advk_pcie *pcie)
 	struct device *dev = &pcie->pdev->dev;
 	int i;
 
-	for (i = 1; i <= PIO_RETRY_CNT; i++) {
+	for (i = 0; i < PIO_RETRY_CNT; i++) {
 		u32 start, isr;
 
 		start = advk_readl(pcie, PIO_START);
 		isr = advk_readl(pcie, PIO_ISR);
 		if (!start && isr)
-			return i;
+			return 0;
 		udelay(PIO_RETRY_DELAY);
 	}
 
@@ -1023,17 +998,10 @@ static int advk_pcie_rd_conf(struct pci_bus *bus, u32 devfn,
 		return pci_bridge_emul_conf_read(&pcie->bridge, where,
 						 size, val);
 
-	/*
-	 * Completion Retry Status is possible to return only when reading all
-	 * 4 bytes from PCI_VENDOR_ID and PCI_DEVICE_ID registers at once and
-	 * CRSSVE flag on Root Bridge is enabled.
-	 */
-	allow_crs = (where == PCI_VENDOR_ID) && (size == 4) &&
-		    (le16_to_cpu(pcie->bridge.pcie_conf.rootctl) &
-		     PCI_EXP_RTCTL_CRSSVE);
-
-	if (advk_pcie_pio_is_running(pcie))
-		goto try_crs;
+	if (advk_pcie_pio_is_running(pcie)) {
+		*val = 0xffffffff;
+		return PCIBIOS_SET_FAILED;
+	}
 
 	/* Program the control register */
 	reg = advk_readl(pcie, PIO_CTRL);
@@ -1052,21 +1020,9 @@ static int advk_pcie_rd_conf(struct pci_bus *bus, u32 devfn,
 	/* Program the data strobe */
 	advk_writel(pcie, 0xf, PIO_WR_DATA_STRB);
 
-	retry_count = 0;
-	do {
-		/* Clear PIO DONE ISR and start the transfer */
-		advk_writel(pcie, 1, PIO_ISR);
-		advk_writel(pcie, 1, PIO_START);
-
-		ret = advk_pcie_wait_pio(pcie);
-		if (ret < 0)
-			goto try_crs;
-
-		retry_count += ret;
-
-		/* Check PIO status and get the read result */
-		ret = advk_pcie_check_pio_status(pcie, allow_crs, val);
-	} while (ret == -EAGAIN && retry_count < PIO_RETRY_CNT);
+	/* Clear PIO DONE ISR and start the transfer */
+	advk_writel(pcie, 1, PIO_ISR);
+	advk_writel(pcie, 1, PIO_START);
 
 	if (ret < 0)
 		goto fail;
@@ -1141,11 +1097,9 @@ static int advk_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 	/* Program the data strobe */
 	advk_writel(pcie, data_strobe, PIO_WR_DATA_STRB);
 
-	retry_count = 0;
-	do {
-		/* Clear PIO DONE ISR and start the transfer */
-		advk_writel(pcie, 1, PIO_ISR);
-		advk_writel(pcie, 1, PIO_START);
+	/* Clear PIO DONE ISR and start the transfer */
+	advk_writel(pcie, 1, PIO_ISR);
+	advk_writel(pcie, 1, PIO_START);
 
 		ret = advk_pcie_wait_pio(pcie);
 		if (ret < 0)

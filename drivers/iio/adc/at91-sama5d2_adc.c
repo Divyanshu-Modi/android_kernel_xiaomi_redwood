@@ -1444,9 +1444,7 @@ static int at91_adc_write_raw(struct iio_dev *indio_dev,
 		    val > st->soc_info.max_sample_rate)
 			return -EINVAL;
 
-		mutex_lock(&st->lock);
 		at91_adc_setup_samp_freq(indio_dev, val);
-		mutex_unlock(&st->lock);
 		return 0;
 	default:
 		return -EINVAL;

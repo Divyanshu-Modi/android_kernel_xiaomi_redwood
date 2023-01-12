@@ -1223,6 +1223,7 @@ static int npu_close(struct inode *inode, struct file *file)
 	struct npu_client *client = file->private_data;
 
 	npu_host_cleanup_networks(client);
+
 	mutex_destroy(&client->list_lock);
 	kfree(client);
 	return 0;

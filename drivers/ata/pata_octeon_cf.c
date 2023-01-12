@@ -905,7 +905,6 @@ static int octeon_cf_probe(struct platform_device *pdev)
 					irq = i;
 					irq_handler = octeon_cf_interrupt;
 				}
-				put_device(&dma_dev->dev);
 			}
 			of_node_put(dma_node);
 		}

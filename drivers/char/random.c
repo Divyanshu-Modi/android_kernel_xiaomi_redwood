@@ -1366,7 +1366,8 @@ static long random_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 			return -EPERM;
 		if (!crng_ready())
 			return -ENODATA;
-		crng_reseed();
+		crng_reseed(&primary_crng, &input_pool);
+		crng_global_init_time = jiffies - 1;
 		return 0;
 	default:
 		return -EINVAL;

@@ -803,6 +803,7 @@ static void mkiss_close(struct tty_struct *tty)
 
 	ax->tty = NULL;
 
+	unregister_netdev(ax->dev);
 	free_netdev(ax->dev);
 }
 

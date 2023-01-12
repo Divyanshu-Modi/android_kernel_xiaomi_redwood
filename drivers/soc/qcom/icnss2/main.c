@@ -82,8 +82,6 @@ module_param(qmi_timeout, ulong, 0600);
 #define WLFW_TIMEOUT                    msecs_to_jiffies(3000)
 #endif
 
-#define ICNSS_RECOVERY_TIMEOUT		60000
-
 static struct icnss_priv *penv;
 static struct work_struct wpss_loader;
 uint64_t dynamic_feature_mask = ICNSS_DEFAULT_FEATURE_MASK;
@@ -588,7 +586,7 @@ static int icnss_setup_dms_mac(struct icnss_priv *priv)
 		}
 		if (!priv->dms.nv_mac_not_prov && !priv->dms.mac_valid) {
 			icnss_pr_err("Unable to get MAC from DMS after retries\n");
-			ICNSS_ASSERT(0);
+			//ICNSS_ASSERT(0);
 			return -EINVAL;
 		}
 	}
@@ -3959,7 +3957,7 @@ static inline void  icnss_get_smp2p_info(struct icnss_priv *priv)
 					    "wlan-smp2p-out",
 					    &priv->smp2p_info.smem_bit);
 	if (IS_ERR(priv->smp2p_info.smem_state)) {
-		icnss_pr_err("Failed to get smem state %d",
+		icnss_pr_smp2p("Failed to get smem state %d",
 			     PTR_ERR(priv->smp2p_info.smem_state));
 	}
 
@@ -4134,9 +4132,6 @@ static int icnss_probe(struct platform_device *pdev)
 #ifdef CONFIG_ICNSS2_RESTART_LEVEL_NOTIF
 		register_trace_pil_restart_level(pil_restart_level_notifier, NULL);
 #endif
-	} else {
-		timer_setup(&priv->recovery_timer,
-			    icnss_recovery_timeout_hdlr, 0);
 	}
 
 	INIT_LIST_HEAD(&priv->icnss_tcdev_list);

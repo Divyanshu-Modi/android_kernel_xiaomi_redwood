@@ -382,20 +382,18 @@ int gntdev_map_grant_pages(struct gntdev_grant_map *map)
 			map->pages, map->count);
 
 	for (i = 0; i < map->count; i++) {
-		if (map->map_ops[i].status == GNTST_okay) {
+		if (map->map_ops[i].status == GNTST_okay)
 			map->unmap_ops[i].handle = map->map_ops[i].handle;
-			alloced++;
-		} else if (!err)
+		else if (!err)
 			err = -EINVAL;
 
 		if (map->flags & GNTMAP_device_map)
 			map->unmap_ops[i].dev_bus_addr = map->map_ops[i].dev_bus_addr;
 
 		if (use_ptemod) {
-			if (map->kmap_ops[i].status == GNTST_okay) {
-				alloced++;
+			if (map->kmap_ops[i].status == GNTST_okay)
 				map->kunmap_ops[i].handle = map->kmap_ops[i].handle;
-			} else if (!err)
+			else if (!err)
 				err = -EINVAL;
 		}
 	}

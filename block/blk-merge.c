@@ -574,10 +574,14 @@ static inline unsigned int blk_rq_get_max_segments(struct request *rq)
 static inline int ll_new_hw_segment(struct request *req, struct bio *bio,
 		unsigned int nr_phys_segs)
 {
-	if (!blk_cgroup_mergeable(req, bio))
+	if (blk_integrity_merge_bio(req->q, req, bio) == false)
 		goto no_merge;
 
-	if (blk_integrity_merge_bio(req->q, req, bio) == false)
+	/* discard request merge won't add new segment */
+	if (req_op(req) == REQ_OP_DISCARD)
+		return 1;
+
+	if (req->nr_phys_segments + nr_phys_segs > blk_rq_get_max_segments(req))
 		goto no_merge;
 
 	/* discard request merge won't add new segment */
@@ -918,11 +922,32 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 
 enum elv_merge blk_try_merge(struct request *rq, struct bio *bio)
 {
+	enum elv_merge where;
+	#ifdef CONFIG_PERF_HUMANTASK
+	if (bio->human_task) {
+
+		if (blk_discard_mergable(rq))
+			where = ELEVATOR_DISCARD_MERGE;
+		else if (blk_rq_pos(rq) - bio_sectors(bio) == bio->bi_iter.bi_sector)
+			where = ELEVATOR_FRONT_MERGE;
+		else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
+			where = ELEVATOR_BACK_MERGE;
+		else
+			where = ELEVATOR_NO_MERGE;
+		if (where && where != ELEVATOR_DISCARD_MERGE) {
+			rq->ioprio = 0 ;
+			bio->bi_ioprio = 0;
+		}
+		return where;
+	}
+	#endif
+
 	if (blk_discard_mergable(rq))
-		return ELEVATOR_DISCARD_MERGE;
+		where = ELEVATOR_DISCARD_MERGE;
 	else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
-		return ELEVATOR_BACK_MERGE;
+		where = ELEVATOR_BACK_MERGE;
 	else if (blk_rq_pos(rq) - bio_sectors(bio) == bio->bi_iter.bi_sector)
-		return ELEVATOR_FRONT_MERGE;
-	return ELEVATOR_NO_MERGE;
+		where = ELEVATOR_FRONT_MERGE;
+	where = ELEVATOR_NO_MERGE;
+	return where;
 }

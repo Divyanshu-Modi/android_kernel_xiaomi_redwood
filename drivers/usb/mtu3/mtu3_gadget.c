@@ -97,7 +97,7 @@ static int mtu3_ep_enable(struct mtu3_ep *mep)
 		if (usb_endpoint_xfer_isoc(desc) ||
 				usb_endpoint_xfer_int(desc)) {
 			interval = desc->bInterval;
-			interval = clamp_val(interval, 1, 16);
+			interval = clamp_val(interval, 1, 16) - 1;
 			mult = usb_endpoint_maxp_mult(desc) - 1;
 		}
 		break;

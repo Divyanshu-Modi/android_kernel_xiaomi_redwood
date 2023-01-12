@@ -152,7 +152,7 @@ void jfs_evict_inode(struct inode *inode)
 			if (test_cflag(COMMIT_Freewmap, inode))
 				jfs_free_zero_link(inode);
 
-			if (ipimap && JFS_IP(ipimap)->i_imap)
+			if (JFS_SBI(inode->i_sb)->ipimap)
 				diFree(inode);
 
 			/*

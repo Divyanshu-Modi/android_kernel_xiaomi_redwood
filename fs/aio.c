@@ -1785,7 +1785,6 @@ static int aio_poll_wake(struct wait_queue_entry *wait, unsigned mode, int sync,
 			schedule_work(&req->work);
 			req->work_scheduled = true;
 		}
-
 		/*
 		 * If the waitqueue is being freed early but we can't complete
 		 * the request inline, we have to tear down the request as best

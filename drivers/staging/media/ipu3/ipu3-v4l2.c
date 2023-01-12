@@ -696,7 +696,7 @@ static int imgu_fmt(struct imgu_device *imgu, unsigned int pipe, int node,
 
 		/* CSS expects some format on OUT queue */
 		if (i != IPU3_CSS_QUEUE_OUT &&
-		    !imgu_pipe->nodes[inode].enabled && !try) {
+		    !imgu_pipe->nodes[inode].enabled) {
 			fmts[i] = NULL;
 			continue;
 		}

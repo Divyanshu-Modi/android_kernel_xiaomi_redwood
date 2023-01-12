@@ -698,7 +698,7 @@ const struct file_operations ovl_file_operations = {
 	.unlocked_ioctl	= ovl_ioctl,
 	.compat_ioctl	= ovl_compat_ioctl,
 	.splice_read    = generic_file_splice_read,
-	.splice_write   = ovl_splice_write,
+	.splice_write   = iter_file_splice_write,
 
 	.copy_file_range	= ovl_copy_file_range,
 	.remap_file_range	= ovl_remap_file_range,

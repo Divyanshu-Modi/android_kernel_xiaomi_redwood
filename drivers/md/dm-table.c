@@ -1750,6 +1750,20 @@ static int device_is_not_random(struct dm_target *ti, struct dm_dev *dev,
 	return q && !blk_queue_add_random(q);
 }
 
+static int device_is_partial_completion(struct dm_target *ti, struct dm_dev *dev,
+					sector_t start, sector_t len, void *data)
+{
+	char b[BDEVNAME_SIZE];
+
+	/* For now, NVMe devices are the only devices of this class */
+	return (strncmp(bdevname(dev->bdev, b), "nvme", 4) != 0);
+}
+
+static bool dm_table_does_not_support_partial_completion(struct dm_table *t)
+{
+	return !dm_table_any_dev_attr(t, device_is_partial_completion, NULL);
+}
+
 static int device_not_write_same_capable(struct dm_target *ti, struct dm_dev *dev,
 					 sector_t start, sector_t len, void *data)
 {

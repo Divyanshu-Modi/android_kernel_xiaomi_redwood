@@ -585,26 +585,14 @@ static int kvm_cpu_down_prepare(unsigned int cpu)
 
 static int kvm_suspend(void)
 {
-	u64 val = 0;
-
 	kvm_guest_cpu_offline(false);
 
-#ifdef CONFIG_ARCH_CPUIDLE_HALTPOLL
-	if (kvm_para_has_feature(KVM_FEATURE_POLL_CONTROL))
-		rdmsrl(MSR_KVM_POLL_CONTROL, val);
-	has_guest_poll = !(val & 1);
-#endif
 	return 0;
 }
 
 static void kvm_resume(void)
 {
 	kvm_cpu_online(raw_smp_processor_id());
-
-#ifdef CONFIG_ARCH_CPUIDLE_HALTPOLL
-	if (kvm_para_has_feature(KVM_FEATURE_POLL_CONTROL) && has_guest_poll)
-		wrmsrl(MSR_KVM_POLL_CONTROL, 0);
-#endif
 }
 
 static struct syscore_ops kvm_syscore_ops = {

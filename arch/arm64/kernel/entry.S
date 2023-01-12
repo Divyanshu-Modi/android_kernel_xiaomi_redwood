@@ -60,6 +60,12 @@
 	.macro kernel_ventry, el, label, regsize = 64
 	.align 7
 .Lventry_start\@:
+#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+	/*
+	 * This must be the first instruction of the EL0 vector entries. It is
+	 * skipped by the trampoline vectors, to trigger the cleanup.
+	 */
+	b	.Lskip_tramp_vectors_cleanup\@
 	.if	\el == 0
 	/*
 	 * This must be the first instruction of the EL0 vector entries. It is
@@ -74,6 +80,8 @@
 	.endif
 .Lskip_tramp_vectors_cleanup\@:
 	.endif
+.Lskip_tramp_vectors_cleanup\@:
+#endif
 
 	sub	sp, sp, #S_FRAME_SIZE
 #ifdef CONFIG_VMAP_STACK
@@ -387,7 +395,7 @@ alternative_if_not ARM64_UNMAP_KERNEL_AT_EL0
 alternative_else_nop_endif
 #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
 	bne	5f
-	msr	far_el1, x29
+	msr	far_el1, x30
 	tramp_alias	x30, tramp_exit_native, x29
 	br	x30
 5:
@@ -1045,6 +1053,12 @@ ENDPROC(el0_svc)
 
 	.popsection				// .entry.text
 
+#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+/*
+ * Exception vectors trampoline.
+ */
+	.pushsection ".entry.tramp.text", "ax"
+
 	// Move from tramp_pg_dir to swapper_pg_dir
 	.macro tramp_map_kernel, tmp
 	mrs	\tmp, ttbr1_el1
@@ -1078,27 +1092,7 @@ alternative_else_nop_endif
 	 */
 	.endm
 
-	.macro tramp_data_page	dst
-	adr_l	\dst, .entry.tramp.text
-	sub	\dst, \dst, PAGE_SIZE
-	.endm
-
-	.macro tramp_data_read_var	dst, var
-#ifdef CONFIG_RANDOMIZE_BASE
-	tramp_data_page		\dst
-	add	\dst, \dst, #:lo12:__entry_tramp_data_\var
-	ldr	\dst, [\dst]
-#else
-	ldr	\dst, =\var
-#endif
-	.endm
-
-#define BHB_MITIGATION_NONE	0
-#define BHB_MITIGATION_LOOP	1
-#define BHB_MITIGATION_FW	2
-#define BHB_MITIGATION_INSN	3
-
-	.macro tramp_ventry, vector_start, regsize, kpti, bhb
+	.macro tramp_ventry, vector_start, regsize
 	.align	7
 1:
 	.if	\regsize == 64
@@ -1135,6 +1129,7 @@ alternative_if_not ARM64_WORKAROUND_CAVIUM_TX2_219_PRFM
 alternative_else_nop_endif
 
 	msr	vbar_el1, x30
+	add	x30, x30, #(1b - \vector_start + 4)
 	isb
 	.else
 	ldr	x30, =vectors
@@ -1174,33 +1169,21 @@ alternative_endif
 	sb
 	.endm
 
-	.macro	generate_tramp_vector,	kpti, bhb
+	.macro	generate_tramp_vector
 .Lvector_start\@:
 	.space	0x400
 
 	.rept	4
-	tramp_ventry	.Lvector_start\@, 64, \kpti, \bhb
+	tramp_ventry	.Lvector_start\@, 64
 	.endr
 	.rept	4
-	tramp_ventry	.Lvector_start\@, 32, \kpti, \bhb
+	tramp_ventry	.Lvector_start\@, 32
 	.endr
 	.endm
 
-#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
-/*
- * Exception vectors trampoline.
- * The order must match __bp_harden_el1_vectors and the
- * arm64_bp_harden_el1_vectors enum.
- */
-	.pushsection ".entry.tramp.text", "ax"
 	.align	11
-ENTRY(tramp_vectors)
-#ifdef CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY
-	generate_tramp_vector	kpti=1, bhb=BHB_MITIGATION_LOOP
-	generate_tramp_vector	kpti=1, bhb=BHB_MITIGATION_FW
-	generate_tramp_vector	kpti=1, bhb=BHB_MITIGATION_INSN
-#endif /* CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
-	generate_tramp_vector	kpti=1, bhb=BHB_MITIGATION_NONE
+SYM_CODE_START_NOALIGN(tramp_vectors)
+	generate_tramp_vector
 END(tramp_vectors)
 
 ENTRY(tramp_exit_native)

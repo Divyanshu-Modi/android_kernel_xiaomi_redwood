@@ -871,8 +871,17 @@ static ssize_t iolatency_set_limit(struct kernfs_open_file *of, char *buf,
 	blkg = ctx.blkg;
 	oldval = iolat->min_lat_nsec;
 
-	iolatency_set_min_lat_nsec(blkg, lat_val);
-	if (oldval != iolat->min_lat_nsec)
+	enable = iolatency_set_min_lat_nsec(blkg, lat_val);
+	if (enable) {
+		if (!blk_get_queue(blkg->q)) {
+			ret = -ENODEV;
+			goto out;
+		}
+
+		blkg_get(blkg);
+	}
+
+	if (oldval != iolat->min_lat_nsec) {
 		iolatency_clear_scaling(blkg);
 	ret = 0;
 out:

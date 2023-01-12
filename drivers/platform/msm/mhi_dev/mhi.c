@@ -1930,19 +1930,19 @@ static void mhi_dev_process_reset_cmd(struct mhi_dev *mhi, int ch_id)
 	}
 
 	ch = &mhi->ch[ch_id];
-	mhi_log(MHI_MSG_VERBOSE, "Processing reset cmd for ch_id:%d\n", ch_id);
+	mhi_log(MHI_MSG_VERBOSE, "Processing reset cmd for ch%d\n", ch_id);
 	/*
 	 * Ensure that the completions that are present in the flush list are
-	 * removed from the list and added to event req list before channel
-	 * reset. Otherwise, those stale events may get flushed along with a
-	 * valid event in the next flush operation.
+	 * removed from the list and discarded before stopping the channel.
+	 * Otherwise, those stale events may get flushed along with a valid
+	 * event in the next flush operation.
 	 */
-	if (!list_empty(&ch->flush_event_req_buffers)) {
-		list_for_each_entry_safe(itr, tmp, &ch->flush_event_req_buffers, list) {
-			list_del(&itr->list);
-			list_add_tail(&itr->list, &ch->event_req_buffers);
-		}
+	spin_lock_irqsave(&mhi_ctx->lock, flags);
+	list_for_each_entry_safe(itr, tmp, &ch->flush_event_req_buffers, list) {
+		list_del(&itr->list);
+		kfree(itr);
 	}
+	spin_unlock_irqrestore(&mhi_ctx->lock, flags);
 
 	/* hard stop and set the channel to stop */
 	mhi->ch_ctx_cache[ch_id].ch_state =
@@ -2027,7 +2027,7 @@ static int mhi_dev_process_cmd_ring(struct mhi_dev *mhi,
 			mhi);
 		if (rc) {
 			mhi_log(MHI_MSG_ERROR,
-				"start ring failed for ch_id:%d\n", ch_id);
+				"start ring failed for ch %d\n", ch_id);
 			goto send_undef_completion_event;
 		}
 
@@ -2056,6 +2056,16 @@ static int mhi_dev_process_cmd_ring(struct mhi_dev *mhi,
 					mhi->ch_ctx_cache[ch_id].err_indx);
 					goto send_undef_completion_event;
 				}
+			}
+			mutex_lock(&mhi->ch[ch_id].ch_lock);
+			rc = mhi_dev_alloc_evt_buf_evt_req(mhi, &mhi->ch[ch_id],
+					evt_ring);
+			mutex_unlock(&mhi->ch[ch_id].ch_lock);
+			if (rc) {
+				mhi_log(MHI_MSG_ERROR,
+					"Failed to alloc ereqs for er %d\n",
+					mhi->ch_ctx_cache[ch_id].err_indx);
+				goto send_undef_completion_event;
 			}
 		}
 
@@ -3195,7 +3205,7 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 	ch->ereqs = kcalloc(ch->evt_req_size, sizeof(*ch->ereqs), GFP_KERNEL);
 	if (!ch->ereqs) {
 		mhi_log(MHI_MSG_ERROR,
-			"Failed to alloc ereqs for ch_id:%d\n", ch->ch_id);
+			"Failed to alloc ereqs for Channel %d\n", ch->ch_id);
 		rc = -ENOMEM;
 		goto free_ereqs;
 	}
@@ -3205,7 +3215,7 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 			GFP_KERNEL);
 	if (!ch->tr_events) {
 		mhi_log(MHI_MSG_ERROR,
-			"Failed to alloc tr_events buffer for ch_id:%d\n",
+			"Failed to alloc tr_events buffer for Channel %d\n",
 			ch->ch_id);
 		rc = -ENOMEM;
 		goto free_ereqs;
@@ -3346,7 +3356,6 @@ void mhi_dev_close_channel(struct mhi_dev_client *handle)
 	struct mhi_dev_channel *ch;
 	int count = 0;
 	int rc = 0;
-	struct event_req *itr, *tmp;
 	if (!handle) {
 		mhi_log(MHI_MSG_ERROR, "Invalid ch access:%d\n", -ENODEV);
 		return;
@@ -3623,8 +3632,7 @@ int mhi_dev_write_channel(struct mhi_req *wreq)
 		 * Expected usage is when there is a write
 		 * to the MHI core -> notify SM.
 		 */
-		mutex_lock(&mhi_ctx->mhi_lock);
-		mhi_log(MHI_MSG_CRITICAL, "Wakeup by ch_id:%d\n", ch->ch_id);
+		mhi_log(MHI_MSG_CRITICAL, "Wakeup by chan:%d\n", ch->ch_id);
 		rc = mhi_dev_notify_sm_event(MHI_DEV_EVENT_CORE_WAKEUP);
 		if (rc) {
 			mhi_log(MHI_MSG_ERROR,

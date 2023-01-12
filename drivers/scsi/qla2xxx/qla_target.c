@@ -3251,8 +3251,8 @@ int qlt_xmit_response(struct qla_tgt_cmd *cmd, int xmit_type,
 			"RESET-RSP online/active/old-count/new-count = %d/%d/%d/%d.\n",
 			vha->flags.online, qla2x00_reset_active(vha),
 			cmd->reset_count, qpair->chip_reset);
-		res = 0;
-		goto out_unmap_unlock;
+		spin_unlock_irqrestore(qpair->qp_lock_ptr, flags);
+		return 0;
 	}
 
 	/* Does F/W have an IOCBs for this request */

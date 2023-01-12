@@ -1936,18 +1936,13 @@ static void ffs_data_closed(struct ffs_data *ffs)
 	if (atomic_dec_and_test(&ffs->opened)) {
 		if (ffs->no_disconnect) {
 			ffs->state = FFS_DEACTIVATED;
-			spin_lock_irqsave(&ffs->eps_lock, flags);
-			epfiles = ffs->epfiles;
-			ffs->epfiles = NULL;
-			spin_unlock_irqrestore(&ffs->eps_lock,
-							flags);
-
 			mutex_lock(&ffs->mutex);
-			if (epfiles)
-				ffs_epfiles_destroy(epfiles,
-						 ffs->eps_count);
+			if (ffs->epfiles) {
+				ffs_epfiles_destroy(ffs->epfiles,
+						   ffs->eps_count);
+				ffs->epfiles = NULL;
+			}
 			mutex_unlock(&ffs->mutex);
-
 			if (ffs->setup_state == FFS_SETUP_PENDING)
 				__ffs_ep0_stall(ffs);
 		} else {
@@ -2018,10 +2013,12 @@ static void ffs_data_clear(struct ffs_data *ffs)
 
 	BUG_ON(ffs->gadget);
 
-	spin_lock_irqsave(&ffs->eps_lock, flags);
-	epfiles = ffs->epfiles;
-	ffs->epfiles = NULL;
-	spin_unlock_irqrestore(&ffs->eps_lock, flags);
+	mutex_lock(&ffs->mutex);
+	if (ffs->epfiles) {
+		ffs_epfiles_destroy(ffs->epfiles, ffs->eps_count);
+		ffs->epfiles = NULL;
+	}
+	mutex_unlock(&ffs->mutex);
 
 	/*
 	 * potential race possible between ffs_func_eps_disable
@@ -2057,6 +2054,7 @@ static void ffs_data_reset(struct ffs_data *ffs)
 
 	ffs_data_clear(ffs);
 
+	ffs->raw_descs_data = NULL;
 	ffs->raw_descs = NULL;
 
 	ffs->raw_descs_length = 0;
@@ -3662,7 +3660,6 @@ static int ffs_func_set_alt(struct usb_function *f,
 	}
 
 	ffs_log("exit: ret %d", ret);
-
 	return ret;
 }
 

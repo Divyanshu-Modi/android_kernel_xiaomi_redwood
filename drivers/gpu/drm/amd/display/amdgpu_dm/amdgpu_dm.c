@@ -1436,6 +1436,8 @@ amdgpu_dm_update_connector_after_detect(struct amdgpu_dm_connector *aconnector)
 			aconnector->edid =
 				(struct edid *)sink->dc_edid.raw_edid;
 
+			drm_connector_update_edid_property(connector,
+							   aconnector->edid);
 			if (aconnector->dc_link->aux_mode)
 				drm_dp_cec_set_edid(&aconnector->dm_dp_aux.aux,
 						    aconnector->edid);

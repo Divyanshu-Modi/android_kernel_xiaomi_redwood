@@ -1378,7 +1378,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 		map.pfn = __phys_to_pfn(__atags_pointer & SECTION_MASK);
 		map.virtual = FDT_FIXED_BASE;
 		map.length = FDT_FIXED_SIZE;
-		map.type = MT_MEMORY_RO;
+		map.type = MT_ROM;
 		create_mapping(&map);
 	}
 

@@ -41,6 +41,11 @@ static int pool_op_alloc(struct tee_shm_pool_mgr *poolm,
 			goto err;
 		}
 
+		for (i = 0; i < nr_pages; i++) {
+			pages[i] = page;
+			page++;
+		}
+
 		for (i = 0; i < nr_pages; i++)
 			pages[i] = page + i;
 

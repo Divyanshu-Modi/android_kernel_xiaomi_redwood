@@ -21,6 +21,9 @@
 #include <linux/pm_runtime.h>
 #include <linux/security.h>
 #include <linux/sort.h>
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+#include <linux/memcontrol.h>
+#endif
 #include <soc/qcom/boot_stats.h>
 
 #include "kgsl_compat.h"
@@ -81,7 +84,7 @@ static inline struct kgsl_pagetable *_get_memdesc_pagetable(
 
 static void kgsl_mem_entry_detach_process(struct kgsl_mem_entry *entry);
 
-static const struct file_operations kgsl_fops;
+static const struct vm_operations_struct kgsl_gpumem_vm_ops;
 
 /*
  * The memfree list contains the last N blocks of memory that have been freed.
@@ -1037,6 +1040,11 @@ static void process_release_memory(struct kgsl_process_private *private)
 		if (!entry->pending_free) {
 			entry->pending_free = 1;
 			spin_unlock(&private->mem_lock);
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+			if (likely(entry->memdesc.page_count))
+				memcg_misc_uncharge(&(entry->memdesc.memgroup),
+					entry->memdesc.page_count, MEMCG_GPU_TYPE);
+#endif
 			kgsl_mem_entry_put(entry);
 		} else {
 			spin_unlock(&private->mem_lock);
@@ -1304,7 +1312,7 @@ kgsl_sharedmem_find(struct kgsl_process_private *private, uint64_t gpuaddr)
 
 	if (!kgsl_mmu_gpuaddr_in_range(private->pagetable, gpuaddr, 0) &&
 		!kgsl_mmu_gpuaddr_in_range(
-			private->pagetable->mmu->securepagetable, gpuaddr, 0))
+			private->pagetable->mmu->securepagetable, gpuaddr,0))
 		return NULL;
 
 	spin_lock(&private->mem_lock);
@@ -2212,6 +2220,12 @@ long gpumem_free_entry(struct kgsl_mem_entry *entry)
 	if (!kgsl_mem_entry_set_pend(entry))
 		return -EBUSY;
 
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+	if (likely(entry->memdesc.page_count))
+		memcg_misc_uncharge(&(entry->memdesc.memgroup),
+				entry->memdesc.page_count, MEMCG_GPU_TYPE);
+#endif
+
 	trace_kgsl_mem_free(entry);
 	kgsl_memfree_add(pid_nr(entry->priv->pid),
 			entry->memdesc.pagetable ?
@@ -2230,6 +2244,12 @@ static void gpumem_free_func(struct kgsl_device *device,
 	struct kgsl_context *context = group->context;
 	struct kgsl_mem_entry *entry = priv;
 	unsigned int timestamp;
+
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+	if (likely(entry->memdesc.page_count))
+		memcg_misc_uncharge(&(entry->memdesc.memgroup),
+				entry->memdesc.page_count, MEMCG_GPU_TYPE);
+#endif
 
 	kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED, &timestamp);
 
@@ -2334,6 +2354,12 @@ static long gpuobj_free_on_timestamp(struct kgsl_device_private *dev_priv,
 static bool gpuobj_free_fence_func(void *priv)
 {
 	struct kgsl_mem_entry *entry = priv;
+
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+	if (likely(entry->memdesc.page_count))
+		memcg_misc_uncharge(&(entry->memdesc.memgroup),
+				entry->memdesc.page_count, MEMCG_GPU_TYPE);
+#endif
 
 	trace_kgsl_mem_free(entry);
 	kgsl_memfree_add(pid_nr(entry->priv->pid),
@@ -2468,7 +2494,7 @@ static int check_vma(unsigned long hostptr, u64 size)
 			return false;
 
 		/* Don't remap memory that we already own */
-		if (vma->vm_file && vma->vm_file->f_op == &kgsl_fops)
+		if (vma->vm_file && vma->vm_ops == &kgsl_gpumem_vm_ops)
 			return false;
 
 		cur = vma->vm_end;
@@ -2640,7 +2666,7 @@ static int kgsl_setup_dmabuf_useraddr(struct kgsl_device *device,
 		 * Check to see that this isn't our own memory that we have
 		 * already mapped
 		 */
-		if (vma->vm_file->f_op == &kgsl_fops) {
+		if (vma->vm_ops == &kgsl_gpumem_vm_ops) {
 			up_read(&current->mm->mmap_sem);
 			return -EFAULT;
 		}
@@ -3625,6 +3651,13 @@ struct kgsl_mem_entry *gpumem_alloc_entry(
 	trace_kgsl_mem_alloc(entry);
 
 	kgsl_mem_entry_commit_process(entry);
+
+#if IS_ENABLED(CONFIG_MIMISC_MC)
+	if (likely(entry->memdesc.page_count))
+		memcg_misc_charge(&(entry->memdesc.memgroup), 0,
+				entry->memdesc.page_count, MEMCG_GPU_TYPE);
+#endif
+
 	return entry;
 err:
 	kfree(entry);

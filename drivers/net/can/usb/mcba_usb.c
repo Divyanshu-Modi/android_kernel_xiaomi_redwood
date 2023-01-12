@@ -80,8 +80,6 @@ struct mcba_priv {
 	atomic_t free_ctx_cnt;
 	void *rxbuf[MCBA_MAX_RX_URBS];
 	dma_addr_t rxbuf_dma[MCBA_MAX_RX_URBS];
-	int rx_pipe;
-	int tx_pipe;
 };
 
 /* CAN frame */
